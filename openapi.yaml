@@ -1,0 +1,126 @@
+openapi: 3.1.0
+info:
+  title: Script-to-B-roll Video Engine
+  version: 1.0.1
+  description: API for creating background jobs that generate captioned B-roll videos from scripts, scenes, or audio.
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      responses:
+        '200':
+          description: Service is alive
+  /ready:
+    get:
+      summary: Readiness check
+      responses:
+        '200':
+          description: Service readiness information
+  /api/v1/broll/jobs:
+    post:
+      summary: Create a script, scene-list, or remote-audio job
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+          description: Reuse the same key for safe retries if supported by the running implementation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                audio_url:
+                  type: string
+                  format: uri
+                  description: Remote audio URL. Use either audio_url, script, or scenes.
+                script:
+                  type: string
+                  description: Script text to narrate.
+                scenes:
+                  type: array
+                  description: Optional pre-segmented scenes.
+                  items:
+                    type: object
+                    required: [text]
+                    properties:
+                      text: {type: string}
+                      visual_hint: {type: string}
+                voice:
+                  type: string
+                  default: en-IN-female
+                aspect_ratios:
+                  type: array
+                  items:
+                    type: string
+                    enum: ['16:9', '9:16', '1:1']
+                style: {type: string}
+                avoid:
+                  type: array
+                  items: {type: string}
+                captions:
+                  type: object
+                  properties:
+                    burn_in: {type: boolean, default: true}
+                    srt: {type: boolean, default: true}
+      responses:
+        '202':
+          description: Job accepted; response body should contain job_id and status.
+        '409':
+          description: Idempotency conflict, if implemented.
+        '422':
+          description: Request validation error.
+        '500':
+          description: Job creation failed.
+  /api/v1/broll/jobs/upload:
+    post:
+      summary: Create a job from uploaded audio
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: MP3, WAV, or M4A audio file, subject to runtime validation.
+                aspect_ratios:
+                  type: string
+                  description: JSON-encoded array, for example ["16:9"].
+                style: {type: string}
+      responses:
+        '202': {description: Job accepted}
+        '415': {description: Unsupported media type}
+        '422': {description: Invalid request}
+  /api/v1/jobs/{job_id}:
+    get:
+      summary: Get job status, progress, and result links
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Job status and available result information
+        '404': {description: Job not found}
+  /api/v1/broll/jobs/{job_id}:
+    get:
+      summary: Get B-roll job status (compatibility alias, if enabled)
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Job status and available result information}
+        '404': {description: Job not found}
