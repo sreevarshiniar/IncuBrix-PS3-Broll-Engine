@@ -1,0 +1,25 @@
+﻿services:
+  - type: web
+    name: incubrix-ps3-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: FOOTAGE_PROVIDER
+        value: pixabay
+      - key: TTS_PROVIDER
+        value: edge-tts
+      - key: PIXABAY_API_KEY
+        sync: false
+
+  - type: web
+    name: incubrix-ps3-ui
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.ui
+    dockerContext: .
+    envVars:
+      - key: API_BASE_URL
+        sync: false

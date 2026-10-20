@@ -1,8 +1,13 @@
-import time, requests, streamlit as st
+import os
+import time
+import requests
+import streamlit as st
+
 st.set_page_config(page_title="B-roll Studio",page_icon="🎬",layout="wide")
 st.title("🎬 Script & Voiceover to B-roll Studio")
 st.caption("IncuBrix Software Engineer Assessment · PS3 prototype")
-base=st.sidebar.text_input("API base URL", "http://localhost:8000").rstrip('/')
+default_api = os.getenv("API_BASE_URL", "http://localhost:8000")
+base = st.sidebar.text_input("API base URL", default_api).rstrip("/")
 mode=st.radio("Input type",["Script to video","Upload voiceover"],horizontal=True)
 ratios=st.multiselect("Output aspect ratios",["16:9","9:16","1:1"],default=["16:9"])
 style=st.text_input("Visual style", "bright, modern, real-world footage")
