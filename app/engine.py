@@ -105,17 +105,28 @@ def run_job(job_id: str, req: JobRequest, input_audio_path: Path | None = None):
             if not candidates:
                 raise ProviderError("No footage candidates returned. " + "; ".join(errors[-2:]))
             ranked=rank_candidates((scene.get("visual_hint") or "") + " " + scene["text"], candidates)
-            chosen=None; reason=""
-            for score,c,why in ranked:
-                if c.get("id") in used_ids: continue
-                chosen=c; reason=f"Highest-ranked unused candidate; {why}; score={score:.3f}"; relevance=max(1,min(5,round(1+4*score,1))); break
+
+            
+            chosen = None
+            reason = ""
+            relevance_score = None
+
+            for score, candidate, why in ranked:
+                if candidate.get("id") in used_ids:
+                    continue
+
+                chosen = candidate
+                reason = f"Highest-ranked unused candidate; {why}; score={score:.3f}"
+                relevance_score = round(float(score), 4)
+                break
+
             if chosen is None: raise ProviderError("Provider returned no unique unused clips for all scenes")
             used_ids.add(chosen.get("id"))
             clip = job_dir / f"clip_{i:03}.mp4"
             download_clip(chosen, clip); clip_paths.append(clip)
             item={"scene_id":i+1,"text":scene["text"],"start":round(scene["start"],3),"end":round(scene["end"],3),"duration":round(scene["end"]-scene["start"],3),
                   "visual_hint":scene.get("visual_hint"),"clip_file":clip.name,"clip_id":chosen.get("id"),"source":chosen.get("source_url"),"provider":chosen.get("provider"),
-                  "creator":chosen.get("creator"),"license":chosen.get("license"),"attribution":chosen.get("attribution"),"ai_generated":False,"reason_chosen":reason,"relevance_score_estimate":relevance}
+                  "creator":chosen.get("creator"),"license":chosen.get("license"),"attribution":chosen.get("attribution"),"ai_generated":False,"reason_chosen":reason,"semantic_similarity_score":relevance_score}
             timeline.append(item)
             store.update(job_id, progress=20 + int(35*(i+1)/len(texts)))
         # Scene-specific SRTs avoid showing captions from other scenes in split renders.
@@ -136,7 +147,16 @@ def run_job(job_id: str, req: JobRequest, input_audio_path: Path | None = None):
         manifest={"job_id":job_id,"created_at":datetime.now(timezone.utc).isoformat(),"status":"succeeded","providers":{"footage":provider.name,"tts":settings.tts_provider,"semantic_model":settings.embedding_model},
           "versions":{"python":os.sys.version.split()[0]},"settings":{"aspect_ratios":req.aspect_ratios,"style":req.style,"avoid":req.avoid,"fps":settings.default_fps,"captions":req.captions.model_dump()},
           "timings":{"audio_duration_seconds":round(total_duration,3)},"cost_estimate_usd":0.0 if settings.footage_provider=="mock" else None,
-          "warnings":["Cost estimate excludes compute and must be measured by the candidate.","Confirm the current Pexels licence/API terms before commercial deployment."],
+          
+          "warnings": [
+            "Cost estimate excludes compute and must be measured by the candidate.",
+            (
+                "Verify current Pixabay content licence terms for the intended use."
+                if provider.name.lower() == "pixabay"
+                else "Verify the active footage provider's current licence and API terms."
+            ),
+          ],
+
           "rights":{"footage_provider":provider.name,"per_clip_rights_recorded":True,"ai_generated_media":False},"outputs":videos}
         manifest_path=job_dir/"manifest.json"; manifest_path.write_text(json.dumps(manifest,indent=2),encoding="utf-8")
         result={"videos":videos,"captions_url":f"/outputs/{job_id}/captions.srt","timeline_url":f"/outputs/{job_id}/timeline.json","manifest_url":f"/outputs/{job_id}/manifest.json","duration_seconds":round(total_duration,3)}
