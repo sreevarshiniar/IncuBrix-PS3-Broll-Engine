@@ -1,0 +1,29 @@
+Deployment Flow and Troubleshooting Notes
+Updated: 20 October 2026
+
+Current architecture:
+Browser -> Streamlit Cloud frontend -> FastAPI backend on Render -> background processing -> FFmpeg/media services -> MP4 and metadata.
+
+Frontend URL:
+https://incubrix-ps3-broll-engine-htngdsxkqfbc5dftgkxu52.streamlit.app/
+
+Backend base URL:
+https://incubrix-ps3-broll-engine.onrender.com
+
+Checks:
+GET /health
+GET /ready
+GET /docs
+POST /api/v1/broll/jobs
+GET /api/v1/jobs/{job_id}
+
+Observed cloud behavior:
+- Health returned 200.
+- Job creation returned 202.
+- Several job-status polls returned 200.
+- A later status request returned an HTML 502 from Render.
+- Logs ended with a new Uvicorn process starting, but the preceding shutdown/crash reason was not included in the provided excerpt.
+
+Potential risk (not yet confirmed as root cause): job state is stored in process memory and can be lost after a restart. Also check Render Events for deployment/restart/OOM and verify that only one intended backend service is configured. Avoid assuming the 502 was caused by the frontend alone.
+
+Do not disable the FastAPI service until the current deployed flow has been tested and a replacement deployment is ready. Do not commit credentials or .env files.

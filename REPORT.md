@@ -1,73 +1,63 @@
-# Engineering Report — PS3 Script and Voiceover to B-roll Video Engine
+# Engineering Report — IncuBrix PS3 Script and Voiceover to B-roll Video Engine
 
 ## 1. Objective
+Build a prototype that accepts a text script or narration and produces scene-based B-roll video with voiceover, captions, and supporting timeline/manifest metadata.
 
-Build an HTTP service that accepts a script, scene list or voiceover and produces a scene-timed B-roll video, captions, and metadata describing the footage and generation configuration.
+## 2. Current deployment and flow
+- **Frontend:** Streamlit Cloud — https://incubrix-ps3-broll-engine-htngdsxkqfbc5dftgkxu52.streamlit.app/
+- **Backend:** FastAPI on Render — https://incubrix-ps3-broll-engine.onrender.com
+- **Repository:** https://github.com/sreevarshiniar/IncuBrix-PS3-Broll-Engine
+- The Streamlit UI submits a job to the FastAPI service, receives a job ID, polls for status, and displays output artifacts when available.
+- The UI is currently displaying. Cloud end-to-end generation is not yet confirmed stable because a status poll returned a Render 502 HTML response during testing.
 
-## 2. Implementation and design choices
+## 3. Design choices
+- **Streamlit** provides the browser-based user interface.
+- **FastAPI** provides API endpoints, input validation, health/readiness checks, and job status responses.
+- **In-process background executor** lets job creation return before rendering finishes, but current in-memory state is not durable across restarts.
+- **Edge TTS** is used for text-to-speech where configured.
+- **faster-whisper** supports transcription of uploaded narration where configured and available.
+- **Sentence Transformers** supports semantic matching when the embedding model is available; similarity values are not human ratings.
+- **Configured stock-footage provider** supplies candidate B-roll assets. Verify the actual deployed environment and provider settings before claiming a specific provider or asset rights.
+- **FFmpeg/FFprobe** handle media processing and rendering.
 
-- **FastAPI** exposes the HTTP API and validates requests.
-- **Streamlit** provides a browser-based interface for trying the workflow.
-- **Edge TTS** is used for narration from text in the observed script workflow.
-- **Pixabay** is the configured footage provider in the latest observed local run.
-- **Sentence Transformers (`sentence-transformers/all-MiniLM-L6-v2`)** ranks candidate footage semantically.
-- **FFmpeg/FFprobe** are used for media processing and should be used to verify output properties.
-- Per-job output includes a video, SRT captions, `timeline.json`, and `manifest.json`.
+## 4. Implemented in the codebase
+The source includes health/readiness endpoints, JSON job creation, upload-based job creation, job-status endpoints, input validation, an idempotency path for JSON requests, script-to-TTS processing, audio transcription, footage retrieval, scene/timeline metadata, SRT/manifest generation, Docker configuration, and selected unit/API tests.
 
-## 3. Evidence from the latest observed run
+## 5. Deployment observations (20 October 2026)
+- `GET /health` returned HTTP 200.
+- `GET /ready` returned HTTP 200 in earlier checks.
+- `POST /api/v1/broll/jobs` returned HTTP 202 for a cloud job.
+- Repeated `GET /api/v1/jobs/{job_id}` calls returned HTTP 200 for a period.
+- A later status request surfaced an HTTP 502 HTML response from Render.
+- The log excerpt ended with Uvicorn starting a new server process, but does not include enough preceding lines to identify whether this was a crash, deploy, platform restart, or resource event.
 
-The latest inspected output folder was `outputs/fb25d88b870345dd834f313028d77dd8/`.
+The failure cause remains unconfirmed. The current in-memory job model is a known risk because a restart can erase job records. Review Render Events and the logs immediately before the process restart; then retest a complete cloud job.
 
-| Item | Observed value | Evidence / qualification |
+## 6. Measurements and evidence
+Do not invent metrics. Update the table only after running tests and saving evidence.
+
+| Metric | Status | Evidence required |
 |---|---|---|
-| Job status | `succeeded` | `manifest.json` |
-| Footage provider | Pixabay | `manifest.json` and timeline records |
-| TTS provider | Edge TTS | `manifest.json` |
-| Semantic model | `sentence-transformers/all-MiniLM-L6-v2` | `manifest.json` |
-| Scenes | 27 | `timeline.json` |
-| Narration duration | 203.424 seconds | `timeline.json` / manifest |
-| Rendered video | `video_16x9.mp4` | Job output directory |
-| Render duration | 203.367 seconds | `manifest.json` |
-| Captions | `captions.srt` present | Job output directory |
-| Timeline and manifest | Both present | Job output directory |
-| FPS | Configured as 30 | Manifest setting; actual encoded stream still requires ffprobe verification |
+| Local unit/API tests | Previously reported: 5 passed | Re-run exact submitted commit and save terminal output |
+| Complete cloud video generation | NOT CONFIRMED | Successful job plus accessible rendered MP4 |
+| 60-second cold turnaround | NOT MEASURED | Timestamped test/log |
+| 60-second warm turnaround | NOT MEASURED | Timestamped test/log |
+| Cost per finished minute | NOT MEASURED | Provider/API/compute assumptions and calculation |
+| 10-input human relevance benchmark | NOT COMPLETED/VERIFIED | Ten completed examples and human ratings |
+| Mean human relevance (1–5) | NOT MEASURED | Human-rated scene sheet |
+| Render success rate | NOT MEASURED | Batch runner results |
+| Duplicate clip rate | NOT VERIFIED | Timeline audit across completed jobs |
+| Peak memory / GPU | NOT MEASURED | Runtime/system measurement |
 
-The current timeline includes source URLs, creator names, licence text, attribution text, selection reasons, and estimated relevance scores for scenes. Some estimates are low (including values around 2.0–2.9), so this run alone does not establish the assessment's required average human relevance of at least 3.5/5.
+## 7. Known gaps and next steps
+1. Diagnose the Render 502 and confirm the cause of the process start/restart.
+2. Persist job records and idempotency state outside process memory.
+3. Configure persistent/object storage for generated videos and artifacts.
+4. Add a durable task queue if long-running jobs must survive process restarts.
+5. Validate provider failover and rights metadata for every selected asset.
+6. Test audio formats, long inputs, aspect ratios, frame quality, frozen/black frames, and audio drift.
+7. Run the required 10-input benchmark and record human relevance scores separately from model similarity scores.
+8. Verify TTS, model, stock media, and FFmpeg build terms/configuration.
 
-## 4. Measurement results
-
-Do not fill unknown metrics with estimates. Replace `NOT MEASURED` only after collecting evidence.
-
-| Metric | Result | Evidence required |
-|---|---|---|
-| 60-second cold turnaround | NOT MEASURED | Timestamped cold run |
-| 60-second warm turnaround | NOT MEASURED | Timestamped warm run |
-| Cost per finished minute | NOT MEASURED | Provider charges and compute assumptions |
-| Coverage with human relevance >= 3 | NOT MEASURED | Scene-level human rating sheet |
-| Mean human relevance across 10 varied videos | NOT MEASURED | Ten outputs and reviewer ratings |
-| Render success rate | NOT MEASURED | Batch results including failures |
-| Repeat-clip rate | NOT MEASURED across the full test pack | Timeline audit for every test |
-| Peak memory / GPU time | NOT MEASURED | Resource measurement |
-
-## 5. Known gaps / risks
-
-- The current manifest warning still refers to Pexels terms even though the observed run used Pixabay. Update the manifest-generation code so warnings accurately reflect the configured provider, then regenerate and inspect outputs.
-- The latest job is only 16:9. Support for 9:16 and 1:1 must be tested before claiming all aspect ratios.
-- Validate the encoded video using FFprobe; a configured FPS value alone is not proof of the encoded frame rate or resolution.
-- Run ten varied inputs and manually rate scene relevance. Do not treat embedding similarity or the generated estimated relevance field as human ratings.
-- Verify every asset's actual terms and attribution requirements. Metadata labels do not themselves establish commercial clearance.
-- Validate provider outage/fallback, upload formats, audio limits, scene coverage, no-repeat behaviour, safety cases, and caption timing.
-- Check integration requirements such as durable background jobs, retry/idempotency behaviour, S3-compatible storage, structured logs/correlation IDs, HMAC callbacks if claimed, and one-command Docker/test execution. Mark unimplemented or untested items as partial/no.
-
-## 6. Next steps
-
-1. Correct provider-specific manifest warnings and regenerate the sample.
-2. Validate MP4 codec, dimensions, FPS, duration and audio with FFprobe.
-3. Run the test pack and preserve both passing and failing outputs.
-4. Create a ten-video human relevance sheet and calculate the actual mean.
-5. Verify source rights and commercial-use terms.
-6. Update the Excel submission workbook with evidence links and truthful Yes/Partial/No status.
-
-## 7. Conclusion
-
-The current evidence demonstrates one successful local script-to-video run with scene metadata and captions. It does not demonstrate that all mandatory assessment requirements are satisfied. This report deliberately separates observed evidence from features and metrics that still need verification.
+## 8. Conclusion
+The project has a deployed Streamlit interface and a separately deployed FastAPI processing service. The UI is visible, but cloud end-to-end generation still requires verification because a Render 502 occurred during status polling. Report the current state honestly as a prototype/demo with outstanding reliability and evaluation work; do not claim every assessment must-have is complete.

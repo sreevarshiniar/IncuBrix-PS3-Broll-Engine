@@ -1,0 +1,35 @@
+IncuBrix PS3 — Submission Status (20 October 2026)
+
+Live Streamlit frontend:
+https://incubrix-ps3-broll-engine-htngdsxkqfbc5dftgkxu52.streamlit.app/
+
+FastAPI backend:
+https://incubrix-ps3-broll-engine.onrender.com
+
+API documentation:
+https://incubrix-ps3-broll-engine.onrender.com/docs
+
+GitHub repository:
+https://github.com/sreevarshiniar/IncuBrix-PS3-Broll-Engine
+
+Current state:
+- Streamlit frontend is deployed and displaying.
+- Backend health/readiness checks returned HTTP 200 in earlier checks.
+- A cloud job creation returned HTTP 202 Accepted.
+- A later job-status poll surfaced a Render 502 HTML response.
+- The available log excerpt does not prove the cause of the process restart.
+- Job state is in memory, so a restart may lose active job records.
+- Complete cloud video generation is not confirmed stable yet.
+
+Important honesty notes:
+- Do not claim all assessment requirements passed.
+- Do not invent runtime, cost, relevance, or success-rate metrics.
+- Cosine similarity is not a human relevance rating.
+- Verify actual footage provider settings and selected asset licences.
+- Keep API keys and .env out of GitHub.
+
+Immediate next steps after submitting the demo URL:
+1. Review Render Events and logs immediately before the Uvicorn process start.
+2. Run one short cloud generation and verify the resulting MP4 and metadata.
+3. Fix status/job persistence and storage reliability.
+4. Re-run tests and save evidence for the submitted commit.

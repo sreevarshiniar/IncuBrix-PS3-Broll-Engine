@@ -1,26 +1,26 @@
-# Sources, models, APIs, libraries and rights
+# Sources, models, APIs, and licence verification
 
-This file describes components observed in the current project. Before final submission, verify exact installed versions, official terms and the actual default configuration. Do not include API keys.
+This document describes intended/known dependencies. Check the exact deployed configuration, package versions, model cards, API terms, and selected asset licences before making any compliance claim. Never store credentials in this file.
 
-| Component | Use in project | Licence / rights notes | Status |
+| Component | Use | Licence/terms notes | Current verification status |
 |---|---|---|---|
-| Python 3.12.7 | Runtime | Python Software Foundation License | Version observed locally; verify at final build |
-| FastAPI | HTTP API | MIT | Verify installed version |
-| Pydantic / pydantic-settings | Validation and environment configuration | MIT | Verify installed versions |
-| Streamlit | Browser UI | Apache-2.0 | Verify installed version |
-| Requests | HTTP requests | Apache-2.0 | Verify installed version |
-| Sentence Transformers `sentence-transformers/all-MiniLM-L6-v2` | Semantic text embeddings/ranking | Verify exact model card and terms for the downloaded revision | Used in latest manifest; exact revision not recorded |
-| Pixabay API and stock videos | B-roll search and source assets | Review current Pixabay Content License/API terms and each asset's restrictions; preserve source URL, creator and attribution | Used in latest observed job; rights still require verification |
-| Edge TTS | Text-to-speech narration | Verify Microsoft's applicable service terms, voice terms, and permitted commercial use | Used in latest observed job; terms not independently verified here |
-| FFmpeg / FFprobe | Clip processing, encoding and media inspection | Build licence depends on configuration; verify the exact distribution and enabled codecs | FFmpeg 9.0.2 essentials build was used locally; verify actual executable/build in final environment |
-| faster-whisper | Audio transcription, if enabled in the audio-input path | Code and selected model weights can have different terms; verify exact model and terms | Verify actual usage and model before claiming |
-| pytest / httpx | Automated tests | Verify installed versions and package licences | Used by test pack; exact versions should be recorded |
-| ChatGPT (OpenAI) | AI coding/documentation assistance | Record actual assistance accurately in `AI_USE.md` | Used during project development; details in `AI_USE.md` |
+| Python | Application runtime | Python Software Foundation License | Development used Python 3.12.7; verify deployed runtime |
+| Streamlit | Frontend UI | Apache-2.0 | UI is deployed on Streamlit Cloud; verify exact package version |
+| FastAPI / Uvicorn | HTTP API service | MIT | Backend deployed on Render; verify exact package versions |
+| Pydantic / pydantic-settings | Configuration and validation | MIT | Verify installed versions |
+| Requests / HTTPX | HTTP clients and tests | Apache-2.0 / BSD-3-Clause | Verify pinned/resolved versions |
+| FFmpeg / FFprobe | Media probing, processing, and rendering | LGPL/GPL status depends on build configuration and enabled components | Local FFmpeg 9.0.2 essentials build was used; verify deployment build and codec configuration |
+| sentence-transformers/all-MiniLM-L6-v2 | Embeddings for semantic matching | Verify model card, exact revision, and model-file terms | Used/intended; confirm successful load in deployed runtime |
+| faster-whisper and selected model | Speech transcription | Code and model weights can have different terms; verify the exact model card | Transcription path exists; verify deployed usage and model selection |
+| Edge TTS | Text-to-speech narration | Online speech service; verify applicable Microsoft/service/voice terms and usage conditions | Configured in project; commercial/assessment use terms not independently cleared |
+| Stock footage provider (deployment setting) | B-roll retrieval | Follow current provider API terms and each selected asset's licence and attribution requirements | Verify actual deployed provider and every chosen asset; manifest metadata alone is not clearance |
+| pytest | Automated tests | MIT | Used for local tests; re-run and save evidence for submitted commit |
 
-## Media audit
+## Evidence to retain
+- `python --version`, `pip freeze` or package version output.
+- `ffmpeg -version` and relevant codec/build configuration.
+- Model name/revision and model-card URL for the actual loaded model.
+- Provider name, asset URL, creator, licence, and required attribution for each selected stock clip.
+- Test output and actual completed video artifacts.
 
-For each selected clip, retain its exact source URL, provider, creator, applicable licence, attribution requirements, and the date/record used to verify those details. A generic string such as “Pixabay Content License; verify current terms” is not a completed rights review. Do not claim every clip is commercially cleared until the current terms and asset-level restrictions have been checked.
-
-## Environment and secrets
-
-API keys belong in `.env` or deployment secrets and must never appear in this file, source control, logs, screenshots, or demo recordings. The repository should contain `.env.example` with variable names and non-secret example values only.
+Do not claim assets are commercially cleared solely because the API returned them. Do not put API keys, tokens, or `.env` values into source control or evidence screenshots.

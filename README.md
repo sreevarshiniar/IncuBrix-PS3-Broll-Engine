@@ -1,124 +1,128 @@
-# PS3 — Script and Voiceover to B-roll Video Engine
+# IncuBrix PS3 — Script and Voiceover to B-roll Video Engine
 
-## Current implementation
+A Streamlit-based interface for turning a script or narration into a scene-based B-roll video with voiceover, captions, and supporting timeline/manifest metadata. The current demo is deployed as a Streamlit UI with a separately hosted FastAPI processing service.
 
-This project is a Python application with a FastAPI backend and Streamlit interface. It accepts a script or uploaded/remote voiceover, splits narration into scenes, searches stock footage through the configured provider, ranks candidates with Sentence Transformers when available, renders video with FFmpeg, and writes captions and per-job metadata.
+> **Submission/demo status (20 October 2026):** The Streamlit frontend is deployed and displaying. End-to-end cloud video generation is still being checked: a job submission was accepted by the API, but a later status poll returned a Render 502 HTML response. Treat the live UI as a demo in progress, not proof that every job completes successfully.
 
-The most recently inspected local run (job `fb25d88b870345dd834f313028d77dd8`, created 2026-10-20) used:
+## Live demo and repository
 
-- Footage provider: Pixabay
-- Text-to-speech provider: Edge TTS
-- Semantic model: `sentence-transformers/all-MiniLM-L6-v2`
-- Output: `video_16x9.mp4`
-- Duration: about 203.4 seconds
-- Timeline: 27 scenes
-- Captions: `captions.srt`; manifest says burn-in and SRT enabled
-- Frame-rate setting: 30 FPS (verify actual output with ffprobe before claiming the rendered file meets the spec)
+- **Streamlit frontend:** https://incubrix-ps3-broll-engine-htngdsxkqfbc5dftgkxu52.streamlit.app/
+- **FastAPI backend:** https://incubrix-ps3-broll-engine.onrender.com
+- **API health:** https://incubrix-ps3-broll-engine.onrender.com/health
+- **API readiness:** https://incubrix-ps3-broll-engine.onrender.com/ready
+- **Interactive API docs:** https://incubrix-ps3-broll-engine.onrender.com/docs
+- **GitHub repository:** https://github.com/sreevarshiniar/IncuBrix-PS3-Broll-Engine
 
-These details describe one observed run, not a guarantee that every input or output format works.
+The Streamlit app's API base URL must point to the deployed backend URL above. The frontend being visible does not by itself confirm the full generation pipeline is healthy.
 
-## Architecture
+## Current architecture
 
-```text
-Streamlit UI / HTTP client
-          |
-          v
-FastAPI (/api/v1)
-          |
-          v
-Background job + input validation
-   |          |             |
-   v          v             v
-TTS / ASR  Semantic ranker  Pixabay footage search
-   \          |             /
-    \         v            /
-     ------ FFmpeg rendering
-                 |
-                 v
- MP4 + captions.srt + timeline.json + manifest.json
+```mermaid
+flowchart TD
+  U[User] --> UI[Streamlit UI on Streamlit Cloud]
+  UI --> API[FastAPI service on Render]
+  API --> Q[In-process background job executor]
+  Q --> TTS[Edge TTS for script narration]
+  Q --> STT[faster-whisper for uploaded narration]
+  Q --> SEM[Sentence Transformers ranking, when available]
+  Q --> STOCK[Configured stock-footage provider]
+  Q --> FF[FFmpeg and FFprobe]
+  FF --> OUT[MP4, SRT, timeline.json, manifest.json]
+  OUT --> UI
 ```
 
-## Windows setup
+## Features implemented in the codebase
 
-1. Install Python 3.12 and FFmpeg/FFprobe. Ensure both executables are on `PATH`.
-2. Open PowerShell in this directory.
-3. Create and activate a virtual environment:
+- Streamlit UI for entering a script and starting video generation.
+- FastAPI endpoints for health/readiness, job creation, upload-based jobs, and job status.
+- Script-to-voiceover flow using Edge TTS.
+- Audio transcription flow using faster-whisper where configured and available.
+- Stock-footage retrieval through the configured provider.
+- Semantic text matching using `sentence-transformers/all-MiniLM-L6-v2` when the model is available, with a fallback path for tests.
+- FFmpeg-based clip processing and video rendering.
+- Caption, timeline, and manifest artifacts.
+- Local automated tests for selected API and semantic-matching behaviours.
+
+## Local setup
+
+Requirements: Python 3.11+ (Python 3.12 is also used in the current development environment), FFmpeg and FFprobe on `PATH`, and internet access for voice/model/media services.
+
+1. Create and activate a virtual environment:
    ```powershell
    python -m venv .venv
    .\.venv\Scripts\Activate.ps1
    ```
-4. Install dependencies:
+2. Install dependencies:
    ```powershell
    python -m pip install -r requirements.txt
    ```
-5. Copy `.env.example` to `.env` and set `FOOTAGE_PROVIDER=pixabay` and `PIXABAY_API_KEY` to your own key. Never commit `.env`.
-6. Start the API in terminal 1:
+3. Copy `.env.example` to `.env` and fill in the credentials for the selected footage provider. Never commit `.env`.
+4. Start the API in one terminal:
    ```powershell
    python -m uvicorn app.main:app --reload
    ```
-7. Start the UI in terminal 2:
+5. In a second terminal, start the UI:
    ```powershell
    python -m streamlit run ui.py
    ```
-8. Open `http://localhost:8501`; API docs are at `http://127.0.0.1:8000/docs`.
+6. Open `http://localhost:8501`. API docs are at `http://127.0.0.1:8000/docs`.
+7. In the Streamlit sidebar, set the API base URL to `http://127.0.0.1:8000` for local testing.
 
-If FFmpeg is not on PATH in a new PowerShell session, set it for that session before starting the API:
+For Windows, add the FFmpeg `bin` directory to `PATH` before starting the terminals if FFmpeg is not already discoverable.
 
-```powershell
-$ffmpegBin = "C:\path\to\ffmpeg\bin"
-$env:Path = "$ffmpegBin;$env:Path"
-```
+## Deployed flow and current troubleshooting note
 
-## Docker
+1. The browser loads the Streamlit UI.
+2. The UI submits a job to `POST /api/v1/broll/jobs` (or the upload endpoint for audio).
+3. The API returns a job ID with HTTP 202.
+4. The UI polls `GET /api/v1/jobs/{job_id}` for progress and result data.
+5. Once finished, the UI presents the output video and any available captions/metadata.
 
-The repository includes Docker files. Docker startup and the full container workflow must be tested on the final version before claiming one-command integration compliance. Configure environment variables through an untracked `.env` file or deployment secrets.
+On 20 October 2026, a deployed job creation request returned `202 Accepted`, and repeated status polls returned `200 OK` before a later request surfaced a Render `502` HTML response. The provided log excerpt ended with a new Uvicorn process starting, but did not establish why the process restarted. The service currently uses in-memory job state, so a restart can lose active job records. Investigate Render Events and the logs immediately before the process start before concluding the root cause.
 
-## API routes
+## API endpoints
 
-- `GET /health` — process health.
-- `GET /ready` — readiness check.
-- `POST /api/v1/broll/jobs` — create a job from a script, scenes, or remote audio URL.
-- `POST /api/v1/broll/jobs/upload` — create a job from uploaded audio.
-- `GET /api/v1/jobs/{job_id}` — poll job status and result metadata.
-- Output files are served under `/outputs/...` by the current local implementation.
+- `GET /health`
+- `GET /ready`
+- `POST /api/v1/broll/jobs`
+- `POST /api/v1/broll/jobs/upload`
+- `GET /api/v1/jobs/{job_id}`
+- `GET /api/v1/broll/jobs/{job_id}`
+- Generated artifacts are served from the configured output/static path when available.
 
-Use an `Idempotency-Key` on POST requests where supported. Check `/docs` against `openapi.yaml` before submission; the OpenAPI file must match the running API exactly.
+See `/docs` on the deployed API for the live schema. Do not assume a video URL remains available after a restart unless persistent storage is configured.
 
-## Output files
+## Output artifacts
 
-Each job folder under `outputs/<job_id>/` may include:
+Depending on the completed job and requested output, the pipeline can produce:
 
-- `video_16x9.mp4` and other requested aspect-ratio videos, if generated
+- Rendered MP4 video
 - `captions.srt`
-- `narration.mp3` for script-based TTS jobs
-- scene/clip intermediate files
-- `timeline.json`
-- `manifest.json`
+- `timeline.json` with scene timing and source-selection metadata
+- `manifest.json` with provider/model/settings, warnings, and rights metadata
 
-Do not manually replace `timeline.json` or `manifest.json` with generic documentation. They are generated evidence for a specific job. Regenerate a job after changing metadata-generation code, then inspect its output.
+A recorded source URL or licence field is not proof that the selected asset has been fully rights-cleared.
 
-## Testing
+## Tests and evidence
 
-Run unit/API tests:
+Run local tests with:
 
 ```powershell
 python -m pytest -q
 ```
 
-Run the batch runner against the running API:
+The latest previously reported local test run was **5 passed**. Re-run the tests against the exact version being submitted and retain the current output as evidence. The batch runner can exercise job cases against a running API; see `test-pack/README.md`.
 
-```powershell
-python scripts/batch_runner.py test_inputs.jsonl --base-url http://localhost:8000 --out test-pack/batch-results.json
-```
+Do not report a 10-input relevance benchmark, human relevance score, turnaround time, cost per minute, or render success rate unless the corresponding tests were actually run and their evidence saved. Cosine similarity values are not human relevance ratings.
 
-Keep the raw test output, batch results, generated files, and failure cases in `test-pack/`. Complete the human relevance rating sheet for ten varied inputs; automated similarity estimates are not human ratings.
+## Important limitations
 
-## Known limitations and honest status
+- Job state and the background executor are in process memory; jobs/idempotency are not durable across restarts and are not coordinated across multiple workers.
+- A cloud status-polling request has returned a Render 502 during testing; the cause is not confirmed yet.
+- Render local disk can be ephemeral unless persistent storage is configured. Generated files may not survive service replacement/restart.
+- A durable task queue, persistent job database, object storage, signed download URLs, HMAC callbacks, and robust cross-provider failover are not confirmed as implemented.
+- Full 10-minute inputs, all aspect ratios/audio formats, frozen/black-frame checks, audio drift, safe reframing, safety handling, and all licensing obligations have not been verified end-to-end.
+- Semantic ranking and transcription depend on model availability, downloads, and deployment resources.
+- Provider/model terms must be checked for the actual assets and services used.
 
-The latest inspected job proves that one script-based run produced a 16:9 MP4, SRT, timeline and manifest with 27 scenes. It does not prove all must-haves pass. In that timeline, several estimated relevance values are below 3.5/5, so ten varied cases must be tested and scenes must be human-rated before claiming the required mean relevance. The current manifest also contains a stale Pexels licence warning even though the observed job uses Pixabay; correct the code that creates the warning and regenerate the output.
-
-Before claiming compliance, verify: MP3/WAV/M4A input and 10-minute limit; all aspect ratios; actual codecs/resolution/frame rate; no gaps or repeated clips; no black/frozen frames or audio drift; safety handling; provider-failure fallback; background progress; idempotency; persistent jobs; MinIO/S3 storage; structured logs and correlation IDs; HMAC callbacks if claimed; and a reproducible one-command Docker/test flow. Do not claim any untested capability.
-
-## Rights and secrets
-
-Verify the current Pixabay licence/API terms and the rights for each actual clip before commercial use. A source URL and a licence label in metadata are records, not independent proof that rights have been cleared. Verify Edge TTS service terms for the intended use. Never commit API keys, `.env`, access tokens, or personal credentials.
+Describe the project as a working prototype/demo with known gaps. Do not mark all assessment must-haves as passed until each one has been tested and backed by evidence.
